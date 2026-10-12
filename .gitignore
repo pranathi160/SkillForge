@@ -64,4 +64,15 @@ target/
 .project
 .settings/
 .factorypath
+# Local secrets and configuration
+backend/src/main/resources/application.properties
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 
+# Build output and dependencies
+backend/target/
+frontend/node_modules/
+frontend/dist/

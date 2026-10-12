@@ -1,0 +1,145 @@
+.sf-auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: #f8f7ff;
+    background: radial-gradient(circle at top left, #493078, transparent 42%), linear-gradient(135deg, #100d20, #251638, #110d20);
+    font-family: Inter, system-ui, sans-serif;
+}
+
+.sf-auth-card {
+    width: 100%;
+    max-width: 430px;
+    padding: 34px;
+    text-align: center;
+    background: rgba(34, 26, 55, 0.96);
+    border: 1px solid rgba(208, 180, 255, 0.25);
+    border-radius: 24px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+}
+
+.sf-logo {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 16px;
+    color: white;
+    background: linear-gradient(135deg, #a78bfa, #6d28d9);
+    border-radius: 18px;
+    font-size: 28px;
+    font-weight: 800;
+}
+
+.sf-auth-card h1 {
+    margin: 0 0 8px;
+    font-size: 32px;
+}
+
+.sf-auth-card h2 {
+    margin: 18px 0 8px;
+    font-size: 22px;
+}
+
+.sf-subtitle,
+.sf-switch {
+    color: #c4b8dc;
+    line-height: 1.6;
+}
+
+.sf-auth-card form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.sf-auth-card input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 48px;
+    padding: 13px 15px;
+    color: white;
+    background: #171126;
+    border: 1px solid #4b3a69;
+    border-radius: 12px;
+    font: inherit;
+}
+
+.sf-auth-card input::placeholder {
+    color: #a99abf;
+}
+
+.sf-auth-card input:focus {
+    outline: 2px solid #a78bfa;
+    outline-offset: 1px;
+}
+
+.sf-primary,
+.sf-secondary {
+    width: 100%;
+    min-height: 48px;
+    margin: 7px 0;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.sf-primary {
+    color: white;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    border: none;
+}
+
+.sf-secondary {
+    color: #e8dcff;
+    background: #2c2042;
+    border: 1px solid #6d5594;
+}
+
+.sf-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.sf-note {
+    margin-top: 22px;
+    color: #b7a9cc;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.sf-message {
+    margin: 18px 0;
+    color: #fda4af;
+    overflow-wrap: anywhere;
+}
+
+.sf-text-button {
+    padding: 8px;
+    color: #c4b5fd;
+    background: transparent;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+.sf-text-button:hover {
+    color: white;
+    text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+    .sf-auth-page {
+        padding: 14px;
+    }
+    .sf-auth-card {
+        padding: 25px 20px;
+    }
+    .sf-auth-card h1 {
+        font-size: 28px;
+    }
+}

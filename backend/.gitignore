@@ -1,0 +1,67 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# Secrets and local configuration
+src/main/resources/application.properties
+.env
+.env.*
+!.env.example
+
+# Java build output
+target/
+
+# IDE files
+.classpath
+.project
+.settings/
+.factorypath
+
+# Frontend dependencies and build output
+node_modules/
+dist/
+
+# Secrets and local configuration
+src/main/resources/application.properties
+.env
+.env.*
+
+# Java build output
+target/
+
+# IDE files
+.classpath
+.project
+.settings/
+.factorypath
+
