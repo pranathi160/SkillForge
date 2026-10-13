@@ -41,12 +41,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                 .requestMatchers(HttpMethod.POST,
-                    "/auth/login", "/auth/register",
-                    "/login", "/register"
+                    "/auth/login",
+                    "/auth/register",
+                    "/login",
+                    "/register"
                 ).permitAll()
 
                 .requestMatchers(HttpMethod.GET,
-                    "/challenges", "/challenges/**"
+                    "/challenges",
+                    "/challenges/**"
                 ).permitAll()
 
                 .requestMatchers(HttpMethod.POST, "/challenges")
@@ -56,7 +59,8 @@ public class SecurityConfig {
                     "/progress/leaderboard"
                 ).permitAll()
 
-                .requestMatchers("/users/admin/**").hasRole("ADMIN")
+                .requestMatchers("/users/admin/**")
+                    .hasRole("ADMIN")
 
                 .anyRequest().authenticated()
             )
@@ -70,21 +74,30 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowedOrigins(List.of(
             "http://localhost:5173",
-            "http://localhost:5176"
+            "http://localhost:5176",
+            "http://localhost:5177",
+            "https://skill-forge-8ew0jl7fj-skill-forge9.vercel.app"
         ));
 
         config.setAllowedMethods(List.of(
-            "GET", "POST", "PUT", "PATCH",
-            "DELETE", "OPTIONS"
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS"
         ));
 
         config.setAllowedHeaders(List.of(
-            "Authorization", "Content-Type",
-            "Accept", "Origin"
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "Origin"
         ));
 
         config.setAllowCredentials(true);
@@ -93,6 +106,7 @@ public class SecurityConfig {
             new UrlBasedCorsConfigurationSource();
 
         source.registerCorsConfiguration("/**", config);
+
         return source;
     }
 }
