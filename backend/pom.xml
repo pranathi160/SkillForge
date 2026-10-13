@@ -115,6 +115,13 @@
             <artifactId>spring-boot-starter-validation-test</artifactId>
             <scope>test</scope>
         </dependency>
+        
+<dependency>
+    <groupId>org.postgresql</groupId>
+    <artifactId>postgresql</artifactId>
+    <scope>runtime</scope>
+</dependency>
+
 
         <!-- Web MVC Test -->
         <dependency>
