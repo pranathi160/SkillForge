@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from "react";
 import api from "./api";
 import Login from "./Login";
@@ -13,8 +12,28 @@ const EMPTY_CHALLENGE = {
   expectedAnswer: ""
 };
 
+function getTokenExpiry(tokenValue) {
+  try {
+    const payloadPart = tokenValue?.split(".")[1];
+    if (!payloadPart) return null;
+
+    const normalized = payloadPart
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+
+    const payload = JSON.parse(atob(normalized));
+    return typeof payload.exp === "number"
+      ? payload.exp * 1000
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem("Token"));
+  const [token, setToken] = useState(
+    () => localStorage.getItem("Token")
+  );
   const [page, setPage] = useState("Dashboard");
 
   const [progress, setProgress] = useState(null);
@@ -37,7 +56,32 @@ export default function App() {
   const storedRole = (
     profile?.role || localStorage.getItem("UserRole") || ""
   ).toUpperCase();
+
   const isAdmin = storedRole === "ADMIN";
+
+  const handleLogout = useCallback((expired = false) => {
+    if (expired) {
+      localStorage.setItem(
+        "SkillForgeSessionMessage",
+        "Your session expired. Please sign in again."
+      );
+    }
+
+    localStorage.removeItem("Token");
+    localStorage.removeItem("UserEmail");
+    localStorage.removeItem("UserRole");
+    localStorage.removeItem("UserId");
+
+    setToken(null);
+    setProgress(null);
+    setProfile(null);
+    setSubmissions([]);
+    setSelectedChallenge(null);
+    setAnswer("");
+    setMessage("");
+    setAdminMessage("");
+    setPage("Dashboard");
+  }, []);
 
   const loadPublicData = useCallback(async () => {
     try {
@@ -47,11 +91,15 @@ export default function App() {
       ]);
 
       setLeaderboard(
-        Array.isArray(leaderboardRes.data) ? leaderboardRes.data : []
+        Array.isArray(leaderboardRes.data)
+          ? leaderboardRes.data
+          : []
       );
 
       setChallenges(
-        Array.isArray(challengesRes.data) ? challengesRes.data : []
+        Array.isArray(challengesRes.data)
+          ? challengesRes.data
+          : []
       );
     } catch (error) {
       console.error("Could not load public data:", error);
@@ -59,7 +107,8 @@ export default function App() {
   }, []);
 
   const loadPrivateData = useCallback(async () => {
-    if (!localStorage.getItem("Token")) return;
+    const savedToken = localStorage.getItem("Token");
+    if (!savedToken) return;
 
     setLoading(true);
 
@@ -99,19 +148,35 @@ export default function App() {
         );
       }
 
-      if (currentRole !== "ADMIN" && results[2]?.status === "fulfilled") {
+      if (
+        currentRole !== "ADMIN" &&
+        results[2]?.status === "fulfilled"
+      ) {
         setProgress(results[2].value.data);
       }
 
+      const expired = results.some(
+        result =>
+          result.status === "rejected" &&
+          result.reason?.response?.status === 401
+      );
+
       results.forEach((result, index) => {
         if (result.status === "rejected") {
-          console.error(`Private request ${index + 1} failed:`, result.reason);
+          console.error(
+            `Private request ${index + 1} failed:`,
+            result.reason
+          );
         }
       });
+
+      if (expired) {
+        handleLogout(true);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleLogout]);
 
   useEffect(() => {
     loadPublicData();
@@ -123,25 +188,30 @@ export default function App() {
     }
   }, [token, loadPrivateData]);
 
+  // Detect the JWT expiry time and log out when it expires.
+  // This does not renew the token.
+  useEffect(() => {
+    if (!token) return undefined;
+
+    const expiry = getTokenExpiry(token);
+    if (!expiry) return undefined;
+
+    if (expiry <= Date.now()) {
+      handleLogout(true);
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(
+      () => handleLogout(true),
+      expiry - Date.now()
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [token, handleLogout]);
+
   function handleLogin(newToken) {
+    localStorage.removeItem("SkillForgeSessionMessage");
     setToken(newToken);
-    setPage("Dashboard");
-  }
-
-  function handleLogout() {
-    localStorage.removeItem("Token");
-    localStorage.removeItem("UserEmail");
-    localStorage.removeItem("UserRole");
-    localStorage.removeItem("UserId");
-
-    setToken(null);
-    setProgress(null);
-    setProfile(null);
-    setSubmissions([]);
-    setSelectedChallenge(null);
-    setAnswer("");
-    setMessage("");
-    setAdminMessage("");
     setPage("Dashboard");
   }
 
@@ -149,7 +219,9 @@ export default function App() {
     event.preventDefault();
 
     if (isAdmin) {
-      setMessage("Admins manage challenges; sign in as a learner to submit.");
+      setMessage(
+        "Admins manage challenges. Sign in as a learner to submit."
+      );
       return;
     }
 
@@ -183,18 +255,26 @@ export default function App() {
       const result = response.data || {};
 
       setMessage(
-        `Status: ${result.status || "Submitted"} · Score: ${result.score ?? 0}`
+        `Status: ${result.status || "Submitted"} · Score: ${
+          result.score ?? 0
+        }`
       );
 
-      await Promise.all([loadPrivateData(), loadPublicData()]);
+      await Promise.all([
+        loadPrivateData(),
+        loadPublicData()
+      ]);
     } catch (error) {
-      console.error("Submission error:", error.response || error);
+      console.error("Submission error:", error);
+
+      if (error.response?.status === 401) {
+        handleLogout(true);
+        return;
+      }
 
       setMessage(
         error.response?.data?.message ||
-        (error.response?.status === 401
-          ? "Your session expired. Please sign in again."
-          : error.response?.status === 403
+          (error.response?.status === 403
             ? "This account cannot submit challenges."
             : "Submission failed. Please try again.")
       );
@@ -217,15 +297,11 @@ export default function App() {
     setAdminMessage("");
     setAdminError(false);
 
-    if (!token) {
+    if (!token || storedRole !== "ADMIN") {
       setAdminError(true);
-      setAdminMessage("Please sign in again.");
-      return;
-    }
-
-    if (storedRole !== "ADMIN") {
-      setAdminError(true);
-      setAdminMessage("Only administrators can create challenges.");
+      setAdminMessage(
+        "Only signed-in administrators can create challenges."
+      );
       return;
     }
 
@@ -247,46 +323,53 @@ export default function App() {
       payload.points <= 0
     ) {
       setAdminError(true);
-      setAdminMessage("Complete every field and enter positive points.");
+      setAdminMessage(
+        "Complete every field and enter positive points."
+      );
       return;
     }
 
     setCreatingChallenge(true);
 
     try {
-      const response = await api.post("/challenges", payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+      const response = await api.post(
+        "/challenges",
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
         }
-      });
+      );
 
       setAdminMessage(
-        `Challenge created successfully! ID: ${response.data?.id ?? "created"}`
+        `Challenge created successfully! ID: ${
+          response.data?.id ?? "created"
+        }`
       );
+
       setAdminError(false);
       setChallengeForm(EMPTY_CHALLENGE);
-
       await loadPublicData();
     } catch (error) {
-      console.error(
-        "Challenge creation failed:",
-        error.response?.status,
-        error.response?.data || error.message
-      );
+      console.error("Challenge creation failed:", error);
 
       const status = error.response?.status;
+
+      if (status === 401) {
+        handleLogout(true);
+        return;
+      }
 
       setAdminError(true);
       setAdminMessage(
         error.response?.data?.message ||
-        (status === 401
-          ? "Your session expired. Sign in again."
-          : status === 403
-            ? "403 Forbidden: the backend did not authorize this admin request. Verify the account role, JWT, and SecurityConfig."
+          (status === 403
+            ? "403 Forbidden. Check your admin role and backend permissions."
             : status === 400
-              ? "Invalid challenge details. Check all fields and difficulty."
-              : "Could not create the challenge. Check the backend console.")
+              ? "Invalid challenge details. Check all fields."
+              : "Could not create the challenge. Check the backend logs.")
       );
     } finally {
       setCreatingChallenge(false);
@@ -294,10 +377,36 @@ export default function App() {
   }
 
   if (!token) {
-    return <Login onLogin={handleLogin} />;
+    const sessionMessage = localStorage.getItem(
+      "SkillForgeSessionMessage"
+    );
+
+    return (
+      <>
+        {sessionMessage && (
+          <div className="sf-session-notice" role="status">
+            <span>{sessionMessage}</span>
+            <button
+              type="button"
+              aria-label="Dismiss message"
+              onClick={() =>
+                localStorage.removeItem("SkillForgeSessionMessage")
+              }
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <Login onLogin={handleLogin} />
+      </>
+    );
   }
 
-  const name = profile?.fullName || progress?.fullName || "SkillForge User";
+  const name =
+    profile?.fullName ||
+    progress?.fullName ||
+    "SkillForge User";
 
   const navItems = [
     ["Dashboard", "◈"],
@@ -329,7 +438,9 @@ export default function App() {
             <button
               type="button"
               key={label}
-              className={`sf-nav-item ${page === label ? "active" : ""}`}
+              className={`sf-nav-item ${
+                page === label ? "active" : ""
+              }`}
               onClick={() => setPage(label)}
             >
               <span>{icon}</span>
@@ -342,17 +453,20 @@ export default function App() {
           <div className="sf-mini-avatar">
             {name.charAt(0).toUpperCase()}
           </div>
+
           <div className="sf-user-mini">
             <strong>{name}</strong>
             <span>{storedRole || "USER"}</span>
           </div>
+
           <button
             type="button"
             className="sf-logout"
-            onClick={handleLogout}
+            onClick={() => handleLogout(false)}
             title="Sign out"
+            aria-label="Log out"
           >
-            ↗
+            ↗ <span className="sf-logout-label">Logout</span>
           </button>
         </div>
       </aside>
@@ -364,36 +478,67 @@ export default function App() {
             <h1>{page}</h1>
           </div>
 
-          <button
-            type="button"
-            className="sf-refresh"
-            onClick={() => Promise.all([loadPublicData(), loadPrivateData()])}
-          >
-            ↻ Refresh
-          </button>
+          <div className="sf-topbar-actions">
+            <button
+              type="button"
+              className="sf-refresh"
+              onClick={() =>
+                Promise.all([
+                  loadPublicData(),
+                  loadPrivateData()
+                ])
+              }
+            >
+              ↻ Refresh
+            </button>
+
+            <button
+              type="button"
+              className="sf-logout sf-top-logout"
+              onClick={() => handleLogout(false)}
+            >
+              ↗ Logout
+            </button>
+          </div>
         </header>
 
-        {loading && <p className="sf-muted">Refreshing your data...</p>}
+        {loading && (
+          <p className="sf-muted">Refreshing your data...</p>
+        )}
 
         {page === "Dashboard" && (
           <>
             <section className="sf-welcome">
               <div>
-                <span className="sf-pill">YOUR JOURNEY CONTINUES</span>
-                <h2>Welcome back, {name.split(" ")[0]}! ✨</h2>
+                <span className="sf-pill">
+                  YOUR JOURNEY CONTINUES
+                </span>
+
+                <h2>
+                  Welcome back, {name.split(" ")[0]}! ✨
+                </h2>
+
                 <p>
                   {isAdmin
                     ? "Manage coding challenges and help learners grow."
                     : "Keep practising. Every challenge takes you one step forward."}
                 </p>
+
                 <button
                   type="button"
                   className="sf-primary"
-                  onClick={() => setPage(isAdmin ? "Admin Dashboard" : "Challenges")}
+                  onClick={() =>
+                    setPage(
+                      isAdmin ? "Admin Dashboard" : "Challenges"
+                    )
+                  }
                 >
-                  {isAdmin ? "Manage challenges →" : "Explore challenges →"}
+                  {isAdmin
+                    ? "Manage challenges →"
+                    : "Explore challenges →"}
                 </button>
               </div>
+
               <div className="sf-welcome-art">{"</>"}</div>
             </section>
 
@@ -413,7 +558,9 @@ export default function App() {
               <StatCard
                 icon="⌘"
                 label="TOTAL SUBMISSIONS"
-                value={progress?.totalSubmissions ?? submissions.length}
+                value={
+                  progress?.totalSubmissions ?? submissions.length
+                }
                 color="blue"
               />
               <StatCard
@@ -427,13 +574,18 @@ export default function App() {
             <section className="sf-panel">
               <div className="sf-panel-heading">
                 <div>
-                  <h2>{isAdmin ? "Active challenges" : "Continue learning"}</h2>
+                  <h2>
+                    {isAdmin
+                      ? "Active challenges"
+                      : "Continue learning"}
+                  </h2>
                   <p>
                     {isAdmin
                       ? "Review the challenges currently published."
                       : "Pick a challenge and practise your skills."}
                   </p>
                 </div>
+
                 <button
                   type="button"
                   className="sf-text-button"
@@ -457,7 +609,9 @@ export default function App() {
               ))}
 
               {challenges.length === 0 && (
-                <p className="sf-muted">No active challenges available.</p>
+                <p className="sf-muted">
+                  No active challenges available.
+                </p>
               )}
             </section>
 
@@ -494,30 +648,51 @@ export default function App() {
             ))}
 
             {challenges.length === 0 && (
-              <p className="sf-muted">No active challenges available.</p>
+              <p className="sf-muted">
+                No active challenges available.
+              </p>
             )}
 
             {!isAdmin && selectedChallenge && (
-              <form className="sf-submit-form" onSubmit={handleSubmit}>
+              <form
+                className="sf-submit-form"
+                onSubmit={handleSubmit}
+              >
                 <h2>
-                  Submit: {selectedChallenge.title || selectedChallenge.name}
+                  Submit:{" "}
+                  {selectedChallenge.title ||
+                    selectedChallenge.name}
                 </h2>
+
                 <p className="sf-muted">
                   {selectedChallenge.description}
                 </p>
-                <label htmlFor="challenge-answer">Your answer</label>
+
+                <label htmlFor="challenge-answer">
+                  Your answer
+                </label>
+
                 <textarea
                   id="challenge-answer"
                   value={answer}
-                  onChange={event => setAnswer(event.target.value)}
+                  onChange={event =>
+                    setAnswer(event.target.value)
+                  }
                   placeholder="Write your code or answer..."
                   rows={6}
                   required
                 />
+
                 <div className="sf-form-actions">
-                  <button className="sf-primary" disabled={submitting}>
-                    {submitting ? "Submitting..." : "Submit answer"}
+                  <button
+                    className="sf-primary"
+                    disabled={submitting}
+                  >
+                    {submitting
+                      ? "Submitting..."
+                      : "Submit answer"}
                   </button>
+
                   <button
                     type="button"
                     className="sf-secondary"
@@ -529,7 +704,12 @@ export default function App() {
                     Cancel
                   </button>
                 </div>
-                {message && <p className="sf-message">{message}</p>}
+
+                {message && (
+                  <p className="sf-message" role="status">
+                    {message}
+                  </p>
+                )}
               </form>
             )}
           </section>
@@ -542,7 +722,9 @@ export default function App() {
         {page === "My Submissions" && (
           <section className="sf-panel">
             <h2>Submission history</h2>
-            <p className="sf-muted">Your attempts returned by the backend.</p>
+            <p className="sf-muted">
+              Your attempts returned by the backend.
+            </p>
 
             {submissions.length === 0 ? (
               <p>No submissions found yet.</p>
@@ -557,22 +739,34 @@ export default function App() {
                       <th>Submitted</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {submissions.map((item, index) => (
-                      <tr key={item.id ?? `${item.challengeId}-${index}`}>
+                      <tr
+                        key={
+                          item.id ??
+                          `${item.challengeId}-${index}`
+                        }
+                      >
                         <td>
                           {item.challengeTitle ||
                             `Challenge ${item.challengeId ?? ""}`}
                         </td>
                         <td>
-                          <span className={`sf-status ${(item.status || "").toLowerCase()}`}>
+                          <span
+                            className={`sf-status ${
+                              (item.status || "").toLowerCase()
+                            }`}
+                          >
                             {item.status || "UNKNOWN"}
                           </span>
                         </td>
                         <td>{item.score ?? 0}</td>
                         <td>
                           {item.submittedAt
-                            ? new Date(item.submittedAt).toLocaleString()
+                            ? new Date(
+                                item.submittedAt
+                              ).toLocaleString()
                             : "—"}
                         </td>
                       </tr>
@@ -589,21 +783,38 @@ export default function App() {
             <div className="sf-profile-avatar">
               {name.charAt(0).toUpperCase()}
             </div>
-            <h2>{profile?.fullName || "Loading profile..."}</h2>
-            <p className="sf-muted">{profile?.email || ""}</p>
+
+            <h2>
+              {profile?.fullName || "Loading profile..."}
+            </h2>
+
+            <p className="sf-muted">
+              {profile?.email || ""}
+            </p>
 
             <div className="sf-profile-details">
               <ProfileRow label="User ID" value={profile?.id} />
-              <ProfileRow label="Role" value={profile?.role || storedRole} />
+              <ProfileRow
+                label="Role"
+                value={profile?.role || storedRole}
+              />
               <ProfileRow
                 label="Account status"
-                value={profile?.active == null ? "—" : profile.active ? "Active" : "Inactive"}
+                value={
+                  profile?.active == null
+                    ? "—"
+                    : profile.active
+                      ? "Active"
+                      : "Inactive"
+                }
               />
               <ProfileRow
                 label="Member since"
                 value={
                   profile?.createdAt
-                    ? new Date(profile.createdAt).toLocaleDateString()
+                    ? new Date(
+                        profile.createdAt
+                      ).toLocaleDateString()
                     : "—"
                 }
               />
@@ -616,7 +827,9 @@ export default function App() {
             <div className="sf-panel-heading">
               <div>
                 <h2>Create a challenge</h2>
-                <p>Add a new challenge to the active challenge library.</p>
+                <p>
+                  Add a new challenge to the active challenge library.
+                </p>
               </div>
             </div>
 
@@ -702,11 +915,18 @@ export default function App() {
                 type="submit"
                 disabled={creatingChallenge}
               >
-                {creatingChallenge ? "Creating..." : "Create challenge"}
+                {creatingChallenge
+                  ? "Creating..."
+                  : "Create challenge"}
               </button>
 
               {adminMessage && (
-                <p className={adminError ? "sf-error" : "sf-success"} role="status">
+                <p
+                  className={
+                    adminError ? "sf-error" : "sf-success"
+                  }
+                  role="status"
+                >
                   {adminMessage}
                 </p>
               )}
@@ -742,17 +962,29 @@ function ChallengeCard({ challenge, onSolve }) {
   return (
     <article className="sf-challenge-card">
       <div className="sf-challenge-icon">&lt;/&gt;</div>
+
       <div className="sf-challenge-content">
         <h3>{title}</h3>
-        <p>{challenge.description || "Practice your coding skills."}</p>
+        <p>
+          {challenge.description || "Practice your coding skills."}
+        </p>
+
         <span className="sf-points">
           ✦ {challenge.points ?? challenge.score ?? 0} points
         </span>
+
         {challenge.difficulty && (
-          <span className="sf-difficulty"> · {challenge.difficulty}</span>
+          <span className="sf-difficulty">
+            {" "}· {challenge.difficulty}
+          </span>
         )}
       </div>
-      <button type="button" className="sf-secondary" onClick={onSolve}>
+
+      <button
+        type="button"
+        className="sf-secondary"
+        onClick={onSolve}
+      >
         View →
       </button>
     </article>
@@ -767,6 +999,7 @@ function LeaderboardPanel({ leaderboard, onViewAll }) {
           <h2>Leaderboard 🏆</h2>
           <p>See how learners are progressing.</p>
         </div>
+
         {onViewAll && (
           <button
             type="button"
@@ -779,17 +1012,29 @@ function LeaderboardPanel({ leaderboard, onViewAll }) {
       </div>
 
       {leaderboard.length === 0 ? (
-        <p className="sf-muted">No leaderboard data available.</p>
+        <p className="sf-muted">
+          No leaderboard data available.
+        </p>
       ) : (
         leaderboard.map((user, index) => (
-          <div className="sf-leader-row" key={user.userId ?? user.id ?? index}>
-            <div className="sf-rank">{user.rank ?? index + 1}</div>
+          <div
+            className="sf-leader-row"
+            key={user.userId ?? user.id ?? index}
+          >
+            <div className="sf-rank">
+              {user.rank ?? index + 1}
+            </div>
+
             <div className="sf-leader-name">
-              <strong>{user.fullName || user.name || "Learner"}</strong>
+              <strong>
+                {user.fullName || user.name || "Learner"}
+              </strong>
               <span>
-                {user.passedChallenges ?? 0} passed · {user.totalSubmissions ?? 0} submissions
+                {user.passedChallenges ?? 0} passed ·{" "}
+                {user.totalSubmissions ?? 0} submissions
               </span>
             </div>
+
             <div className="sf-leader-score">
               {user.totalScore ?? user.score ?? 0} pts
             </div>

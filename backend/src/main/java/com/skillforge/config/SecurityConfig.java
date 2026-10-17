@@ -22,7 +22,8 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
@@ -34,27 +35,41 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                session.sessionCreationPolicy(
+                    SessionCreationPolicy.STATELESS
+                )
             )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                .requestMatchers(HttpMethod.POST,
-                    "/auth/login", "/auth/register",
-                    "/login", "/register"
+                .requestMatchers(
+                    HttpMethod.POST,
+                    "/auth/login",
+                    "/auth/register",
+                    "/auth/refresh",
+                    "/login",
+                    "/register"
                 ).permitAll()
 
-                .requestMatchers(HttpMethod.GET,
-                    "/challenges", "/challenges/**"
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/challenges",
+                    "/challenges/**"
                 ).permitAll()
 
-                .requestMatchers(HttpMethod.POST, "/challenges")
-                    .hasRole("ADMIN")
+                .requestMatchers(
+                    HttpMethod.POST,
+                    "/challenges"
+                ).hasRole("ADMIN")
 
-                .requestMatchers(HttpMethod.GET, "/progress/leaderboard")
-                    .permitAll()
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/progress/leaderboard"
+                ).permitAll()
 
-                .requestMatchers("/users/admin/**").hasRole("ADMIN")
+                .requestMatchers(
+                    "/users/admin/**"
+                ).hasRole("ADMIN")
 
                 .anyRequest().authenticated()
             )
@@ -68,6 +83,7 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowedOrigins(List.of(
@@ -90,9 +106,10 @@ public class SecurityConfig {
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source =
-            new UrlBasedCorsConfigurationSource();
+                new UrlBasedCorsConfigurationSource();
 
         source.registerCorsConfiguration("/**", config);
+
         return source;
     }
 }

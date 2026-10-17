@@ -1,9 +1,8 @@
-
 import { useState } from "react";
 import axios from "axios";
 import "./Login.css";
 
-const API = "http://localhost:8081";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8081";
 
 export default function Login({ onLogin }) {
   const [role, setRole] = useState("");
@@ -52,8 +51,14 @@ export default function Login({ onLogin }) {
       const data = response.data;
       const actualRole = String(data.role || "").toUpperCase();
 
-      if (!data.token || !["ADMIN", "LEARNER"].includes(actualRole)) {
-        setMessage("The login response is missing a valid token or role.");
+      if (
+        !data.token ||
+        !data.refreshToken ||
+        !["ADMIN", "LEARNER"].includes(actualRole)
+      ) {
+        setMessage(
+          "Login response is missing a valid token, refresh token, or role."
+        );
         return;
       }
 
@@ -65,6 +70,7 @@ export default function Login({ onLogin }) {
       }
 
       localStorage.setItem("Token", data.token);
+      localStorage.setItem("RefreshToken", data.refreshToken);
       localStorage.setItem("UserEmail", data.email || email.trim());
       localStorage.setItem("UserRole", actualRole);
 
@@ -72,12 +78,20 @@ export default function Login({ onLogin }) {
         localStorage.setItem("UserId", String(data.userId));
       }
 
+      if (data.fullName) {
+        localStorage.setItem("FullName", data.fullName);
+      }
+
       onLogin(data.token);
     } catch (error) {
+      console.error("SkillForge login error:", error);
+
       setMessage(
         error.response?.data?.message ||
         error.response?.data?.error ||
-        "Unable to sign in. Check your credentials and backend."
+        (error.response
+          ? `Request failed with status ${error.response.status}.`
+          : "Cannot connect to the backend. Please try again.")
       );
     } finally {
       setLoading(false);
